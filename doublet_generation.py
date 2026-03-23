@@ -4,6 +4,7 @@ import warnings
 import pandas as pd
 from anndata import AnnData
 import scanpy as sc
+import itertools
 
 def create_doublets(X, dbl_idx, clusters=None, resamp=0.5, half_size=0.5, adjust_size=False):
     """
@@ -367,7 +368,7 @@ def _get_meta_cells(X, clusters, n_meta_cells=20, meta_cell_size=20):
     meta_X = sp.csr_matrix(np.vstack(meta_vectors))
     return meta_X, np.array(meta_cluster_labels)
 
-def get_artificial_doublets(X, n=3000, clusters=None, resamp=0.25,
+def get_artificial_doublets(X, n=1000, clusters=None, resamp=0.25,
                             half_size=0.25, adjust_size=0.25, prop_random=0.1,
                             sel_mode="proportional", n_meta_cells=2, meta_triplets=True, 
                             trim_q=(0.05, 0.95)):
@@ -521,7 +522,10 @@ def get_artificial_doublets(X, n=3000, clusters=None, resamp=0.25,
                      X_C = meta_tri_X[triplet_indices[:, 2]]
                      
                      X_triplets = (X_A + X_B + X_C) / 2.0
-                     X_triplets = X_triplets.round()
+                     if sp.issparse(X_triplets):
+                         X_triplets.data = np.round(X_triplets.data)
+                     else:
+                         X_triplets = np.round(X_triplets)
                      
                      results_X.append(X_triplets)
                      
