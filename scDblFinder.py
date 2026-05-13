@@ -176,7 +176,7 @@ def compute_doublet_score(
         n_clusters = 1
 
     if unident_th is None:
-        unident_th = 0.0 if clusters is not None else 0.2
+        unident_th = 0.0 if clusters is not None else 0.1
         
     adata_orig = adata
     
