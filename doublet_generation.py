@@ -532,10 +532,14 @@ def get_artificial_doublets(X, n=3000, clusters=None, resamp=0.25,
     # Storage for results
     results_X = []
     results_origins = []
+    # 'rDbl' for random doublets (used for rDbl. obs_name prefix), 'art' for all others.
+    # R's createDoublets uses prefix="rDbl." on the column names of random doublets;
+    # .optimThreshold checks row.names for that prefix to estimate expected false negatives.
+    results_types = []
 
     # 2. Random Doublets
     n_random = int(np.ceil(n * prop_random)) if clusters is not None else n
-    
+
     if n_random > 0:
         # Generate random pairs.
         # Match R: sample 2*n indices, without replacement when possible, then reshape.
@@ -545,7 +549,7 @@ def get_artificial_doublets(X, n=3000, clusters=None, resamp=0.25,
         pairs_r = sampled.reshape(-1, 2, order='F')
         # Remove self-pairs
         pairs_r = pairs_r[pairs_r[:, 0] != pairs_r[:, 1]]
-        
+
         if clusters is None:
             # If no clusters, everything is random
             X_rand = create_doublets(X_curr, pairs_r, adjust_size=False, resamp=resamp, half_size=half_size, random_state=random_state, rng=rng, debug_outdir=debug_outdir)
@@ -556,34 +560,37 @@ def get_artificial_doublets(X, n=3000, clusters=None, resamp=0.25,
             c2 = clusters_curr[pairs_r[:, 1]]
             # Match R's paste ordering for random pairs (reverse order)
             orig_rand = [f"{b}+{a}" for a, b in zip(c1, c2)]
-            X_rand = create_doublets(X_curr, pairs_r, clusters=clusters_curr, adjust_size=adjust_size, 
+            X_rand = create_doublets(X_curr, pairs_r, clusters=clusters_curr, adjust_size=adjust_size,
                                      resamp=resamp, half_size=half_size, random_state=random_state, rng=rng, debug_outdir=debug_outdir)
-        
+
         results_X.append(X_rand)
         results_origins.extend(orig_rand)
+        # R names these with prefix="rDbl." in createDoublets; mark for naming in scDblFinder.
+        results_types.extend(['rDbl'] * X_rand.shape[0])
 
     # 3. Cross-Cluster Doublets (Heterotypic)
     n_main = int(np.ceil(n * (1 - prop_random))) if clusters is not None else n
     n_cluster_dbl = int(np.ceil(n_main * (0.9 if (clusters is not None and n_meta_cells > 0) else 1.0)))
     if n_cluster_dbl > 0 and clusters is not None:
-        
+
         ca_pairs, ca_origins = get_cell_pairs(clusters_curr, n=n_cluster_dbl, sel_mode=sel_mode, rng=rng, debug_outdir=debug_outdir, use_sample_int=True)
-        
+
         if len(ca_pairs) > 0:
             X_cluster = create_doublets(X_curr, ca_pairs, clusters=clusters_curr,
                                         adjust_size=adjust_size, half_size=half_size, resamp=resamp, random_state=random_state, rng=rng, debug_outdir=debug_outdir)
             results_X.append(X_cluster)
             results_origins.extend(ca_origins)
+            results_types.extend(['art'] * X_cluster.shape[0])
 
     # 4. Meta Cells
     # Check if we should generate meta cells
-    if clusters is not None and len(np.unique(clusters_curr)) < 3: 
+    if clusters is not None and len(np.unique(clusters_curr)) < 3:
         n_meta_cells = 0
-        
+
     if clusters is not None and n_meta_cells > 0:
         # Create doublets from meta cells
         meta_X, meta_cl = _get_meta_cells(X_curr, clusters_curr, n_meta_cells=n_meta_cells, meta_cell_size=30, rng=rng)
-        
+
         if meta_X is not None:
             n_meta_dbl = int(np.ceil(n_main * 0.1)) # 10% of the reduced main count
 
@@ -596,7 +603,8 @@ def get_artificial_doublets(X, n=3000, clusters=None, resamp=0.25,
 
                 results_X.append(X_meta_dbl)
                 results_origins.extend(ca_meta_origins)
-                 
+                results_types.extend(['artMetaDbl'] * X_meta_dbl.shape[0])
+
     # 5. Triplets from Meta Cells
     # R logic: check if clusters have >10% of cells
     # If yes, use those. Else use 3 largest.
@@ -604,60 +612,57 @@ def get_artificial_doublets(X, n=3000, clusters=None, resamp=0.25,
          unique_c, counts = np.unique(clusters_curr, return_counts=True)
          pct_10 = len(clusters_curr) / 10.0
          large_clusters = unique_c[counts >= pct_10]
-         
+
          if len(large_clusters) > 2:
              target_cl = large_clusters
          else:
              # Sort by counts descending
              sorted_idx = np.argsort(-counts)
              target_cl = unique_c[sorted_idx][:3]
-             
+
          # Mask for cells in target clusters
          w_triplet = np.isin(clusters_curr, target_cl)
-         
+
          if np.sum(w_triplet) > 0:
              # Create meta cells for triplets
              # R: n.meta.cells=1, meta.cell.size=100
-             meta_tri_X, meta_tri_cl = _get_meta_cells(X_curr[w_triplet], clusters_curr[w_triplet], 
+             meta_tri_X, meta_tri_cl = _get_meta_cells(X_curr[w_triplet], clusters_curr[w_triplet],
                                                         n_meta_cells=1, meta_cell_size=100)
-             
+
              if meta_tri_X is not None and meta_tri_X.shape[0] >= 3:
                  # Generate all combinations of length 3
                  # R: expand.grid(i, i, i) -> ca[ca[,1]<ca[,2] & ca[,2]<ca[,3],]
                  # Python: itertools.combinations
-                 
+
                  n_meta_total = meta_tri_X.shape[0]
                  triplet_indices = list(itertools.combinations(range(n_meta_total), 3))
-                 
+
                  if triplet_indices:
                      triplet_indices = np.array(triplet_indices)
-                     
+
                      # Simple average of 3 cells: (A+B+C)/2 -> round
                      # meta_tri_X is sparse
-                     
+
                      X_A = meta_tri_X[triplet_indices[:, 0]]
                      X_B = meta_tri_X[triplet_indices[:, 1]]
                      X_C = meta_tri_X[triplet_indices[:, 2]]
-                     
+
                      X_triplets = (X_A + X_B + X_C) / 2.0
                      if sp.issparse(X_triplets):
                          X_triplets.data = np.round(X_triplets.data)
                      else:
                          X_triplets = np.round(X_triplets)
-                     
+
                      results_X.append(X_triplets)
-                     
-                     # Origins
-                     # R: paste("artTriplet.", ...)
-                     # We'll just label them as triplets
                      results_origins.extend([f"artTriplet" for _ in range(X_triplets.shape[0])])
+                     results_types.extend(['artTriplet'] * X_triplets.shape[0])
 
     # Combine results
     if not results_X:
-        return {"counts": sp.csr_matrix((0, X.shape[1])), "origins": []}
-        
+        return {"counts": sp.csr_matrix((0, X.shape[1])), "origins": [], "types": []}
+
     final_X = sp.vstack(results_X)
-    return {"counts": final_X, "origins": results_origins}
+    return {"counts": final_X, "origins": results_origins, "types": results_types}
 
 
 def add_doublets_to_adata(adata, clusters_col=None, n_doublets=None, verbose=True):

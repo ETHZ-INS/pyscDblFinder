@@ -1,15 +1,11 @@
-from .scDblFinder import scDblFinder
-from .clustering import fastcluster
-from .doublet_generation import getArtificialDoublets
-from .thresholding import doubletThresholding
-from .find_doublet_clusters import findDoubletClusters
-from .recover_doublets import recoverDoublets
-from .plotting import plotDoubletMap, plotThresholds
-from .misc import (
-    cxds2,
-    selFeatures,
-    propHomotypic,
-    getExpectedDoublets,
-    mockDoubletAdata,
-    directDblClassification,
+from .scDblFinder import compute_doublet_score
+from .clustering import fast_cluster
+from .doublet_generation import get_artificial_doublets, get_expected_doublets
+from .thresholding import (
+    doublet_thresholding,
+    doublet_thresholding_optim,
+    doublet_thresholding_dbr,
+    doublet_thresholding_griffiths,
+    optim_threshold,
 )
+from .misc import cxds2, select_features

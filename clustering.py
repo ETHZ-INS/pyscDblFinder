@@ -151,7 +151,7 @@ def fast_cluster(adata, n_clusters=None, n_components=30, n_features=1000,
             rsc.pp.pca(adata_calc, n_comps=n_components, random_state=int(rng.randint32()))
         else:
             from sklearn.decomposition import PCA
-            pca = PCA(n_components=min(n_components, min(adata_calc.X.shape)), svd_solver="full")
+            pca = PCA(n_components=min(n_components, min(adata_calc.X.shape) - 1), svd_solver="randomized", random_state=int(rng.randint32()))
             adata_calc.obsm["X_pca"] = pca.fit_transform(adata_calc.X)
              
     X_pca = adata_calc.obsm['X_pca'][:, :n_components]

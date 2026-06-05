@@ -183,7 +183,7 @@ def compute_doublet_score(
         n_clusters = 1
 
     if unident_th is None:
-        unident_th = 0.0 if clusters is not None else 0.1
+        unident_th = 0.0 if clusters is not None else 0.2
         
     adata_orig = adata
     
@@ -228,11 +228,17 @@ def compute_doublet_score(
     )
     X_artificial = res['counts']
     origins = res['origins']
-    
+    art_types = res.get('types', ['art'] * len(origins))
+
     # Create AnnData for artificial
     adata_art = AnnData(X=X_artificial)
-    # Name artificial cells
-    art_names = [f"art.{i}" for i in range(1, len(origins) + 1)]
+    # Name artificial cells: random doublets get "rDbl." prefix to match R's createDoublets
+    # prefix="rDbl." convention. .optimThreshold checks row names for "^rDbl\." to estimate
+    # expected false negatives from homotypic doublets.
+    art_names = [
+        f"rDbl.{i+1}" if t == 'rDbl' else f"art.{i+1}"
+        for i, t in enumerate(art_types)
+    ]
     try:
         adata_art.obs_names = art_names
     except Exception:

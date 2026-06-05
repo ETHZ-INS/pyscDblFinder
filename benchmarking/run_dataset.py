@@ -5,8 +5,8 @@ import pandas as pd
 import time
 from sklearn.metrics import roc_auc_score, precision_recall_curve, auc
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from scdblfinder.scDblFinder import compute_doublet_score
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+from pyscDblFinder.scDblFinder import compute_doublet_score
 
 def eval_mode(adata, mode_name, clusters_col, ds_name, n_repeats=1):
     aurocs = []

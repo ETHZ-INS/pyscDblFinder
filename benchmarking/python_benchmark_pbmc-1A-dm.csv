@@ -1,0 +1,3 @@
+dataset,method,AUPRC,AUROC,elapsed
+pbmc-1A-dm,scDblFinder.Py.clusters,0.5181928441479685,0.5,147.15021777153015
+pbmc-1A-dm,scDblFinder.Py.random,0.5181928441479685,0.5,2.9843361377716064
