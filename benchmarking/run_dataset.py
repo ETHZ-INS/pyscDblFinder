@@ -8,11 +8,11 @@ from sklearn.metrics import roc_auc_score, precision_recall_curve, auc
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from pyscDblFinder.scDblFinder import compute_doublet_score
 
-def eval_mode(adata, mode_name, clusters_col, ds_name, n_repeats=1):
+def eval_mode(adata, mode_name, clusters_col, ds_name, n_repeats=1, use_gpu=False):
     aurocs = []
     auprcs = []
     elapsed_times = []
-    
+
     for i in range(n_repeats):
         st = time.time()
         try:
@@ -25,6 +25,7 @@ def eval_mode(adata, mode_name, clusters_col, ds_name, n_repeats=1):
                 n_iters=3,
                 clusters_col=clusters_col,
                 n_features=1000 if ds_name.startswith("pbmc") else 1352,
+                use_gpu=use_gpu,
             )
         except NotImplementedError as e:
             print(f"    Failed on {mode_name} for {ds_name} (repeat {i}): {e}")
@@ -55,34 +56,38 @@ def eval_mode(adata, mode_name, clusters_col, ds_name, n_repeats=1):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python run_dataset.py <dataset_name> [n_repeats]")
+        print("Usage: python run_dataset.py <dataset_name> [n_repeats] [--gpu]")
         sys.exit(1)
-        
+
     ds_name = sys.argv[1]
-    n_repeats = int(sys.argv[2]) if len(sys.argv) > 2 else 1
+    remaining = sys.argv[2:]
+    use_gpu = '--gpu' in remaining
+    remaining = [a for a in remaining if a != '--gpu']
+    n_repeats = int(remaining[0]) if remaining else 1
     n_features = 1000 if ds_name.startswith('pbmc') else 1352
     ds_path = f"datasets/{ds_name}.h5ad"
     if not os.path.exists(ds_path):
         print(f"Dataset {ds_path} not found.")
         sys.exit(1)
-        
-    print(f"Evaluating {ds_name}...")
+
+    print(f"Evaluating {ds_name} (use_gpu={use_gpu})...")
     adata = sc.read_h5ad(ds_path)
     if 'truth' in adata.obs:
         adata.obs['truth'] = adata.obs['truth'].str.lower()
-        
+
     all_results = []
     print(f"  -> Clustered Mode")
-    res_clust = eval_mode(adata, "scDblFinder.Py.clusters", "clusters", ds_name, n_repeats=n_repeats)
+    res_clust = eval_mode(adata, "scDblFinder.Py.clusters", "clusters", ds_name,
+                          n_repeats=n_repeats, use_gpu=use_gpu)
     if res_clust:
         all_results.append(res_clust)
-        
+
     print(f"  -> Random Mode")
-    
+
     aurocs = []
     auprcs = []
     elapsed_times = []
-    
+
     for i in range(n_repeats):
         st = time.time()
         try:
@@ -93,6 +98,7 @@ def main():
                 n_iters=3,
                 clusters_col=None,
                 n_features=n_features,
+                use_gpu=use_gpu,
             )
         except NotImplementedError as e:
             print(f"Failed on random mode for {ds_name}: {e}")
